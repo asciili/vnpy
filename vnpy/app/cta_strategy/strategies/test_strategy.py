@@ -33,6 +33,7 @@ class TestStrategy(CtaTemplate):
             self.test_stop_order
         ]
         self.last_tick = None
+        self.load_bar(10)
 
     def on_init(self):
         """
