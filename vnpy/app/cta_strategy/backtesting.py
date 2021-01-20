@@ -227,6 +227,9 @@ class BacktestingEngine:
         # Load 30 days of data each time and allow for progress update
         total_days = (self.end - self.start).days
         progress_days = int(total_days / 10)
+        #ethan prevent from zero progress
+        if progress_days == 0:
+            progress_days = total_days;
         progress_delta = timedelta(days=progress_days)
         interval_delta = INTERVAL_DELTA_MAP[self.interval]
 
