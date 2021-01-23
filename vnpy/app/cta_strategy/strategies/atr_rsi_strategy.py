@@ -63,7 +63,7 @@ class AtrRsiStrategy(CtaTemplate):
         self.rsi_buy = 50 + self.rsi_entry
         self.rsi_sell = 50 - self.rsi_entry
 
-        self.load_bar(10)
+        self.load_bar(1)
 
     def on_start(self):
         """

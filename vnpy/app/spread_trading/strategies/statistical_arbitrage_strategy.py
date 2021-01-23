@@ -61,7 +61,7 @@ class StatisticalArbitrageStrategy(SpreadStrategyTemplate):
         """
         self.write_log("策略初始化")
 
-        self.load_bar(10)
+        self.load_bar(1)
 
     def on_start(self):
         """

@@ -46,7 +46,7 @@ class TurtleSignalStrategy(CtaTemplate):
         Callback when strategy is inited.
         """
         self.write_log("策略初始化")
-        self.load_bar(20)
+        self.load_bar(1)
 
     def on_start(self):
         """

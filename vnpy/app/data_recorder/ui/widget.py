@@ -19,7 +19,7 @@ class RecorderManager(QtWidgets.QWidget):
 
     signal_log = QtCore.pyqtSignal(Event)
     signal_update = QtCore.pyqtSignal(Event)
-    signal_contract = QtCore.pyqtSignal(Event)
+    # signal_contract = QtCore.pyqtSignal(Event)
     signal_exception = QtCore.pyqtSignal(Event)
 
     def __init__(self, main_engine: MainEngine, event_engine: EventEngine):
@@ -43,14 +43,14 @@ class RecorderManager(QtWidgets.QWidget):
         self.symbol_line.setFixedHeight(
             self.symbol_line.sizeHint().height() * 2)
 
-        contracts = self.main_engine.get_all_contracts()
-        self.vt_symbols = [contract.vt_symbol for contract in contracts]
+        # contracts = self.main_engine.get_all_contracts()
+        # self.vt_symbols = [contract.vt_symbol for contract in contracts]
 
-        self.symbol_completer = QtWidgets.QCompleter(self.vt_symbols)
-        self.symbol_completer.setFilterMode(QtCore.Qt.MatchContains)
-        self.symbol_completer.setCompletionMode(
-            self.symbol_completer.PopupCompletion)
-        self.symbol_line.setCompleter(self.symbol_completer)
+        # self.symbol_completer = QtWidgets.QCompleter(self.vt_symbols)
+        # self.symbol_completer.setFilterMode(QtCore.Qt.MatchContains)
+        # self.symbol_completer.setCompletionMode(
+        #     self.symbol_completer.PopupCompletion)
+        # self.symbol_line.setCompleter(self.symbol_completer)
 
         add_bar_button = QtWidgets.QPushButton("添加")
         add_bar_button.clicked.connect(self.add_bar_recording)
@@ -104,11 +104,11 @@ class RecorderManager(QtWidgets.QWidget):
     def register_event(self):
         """"""
         self.signal_log.connect(self.process_log_event)
-        self.signal_contract.connect(self.process_contract_event)
+        # self.signal_contract.connect(self.process_contract_event)
         self.signal_update.connect(self.process_update_event)
         self.signal_exception.connect(self.process_exception_event)
 
-        self.event_engine.register(EVENT_CONTRACT, self.signal_contract.emit)
+        # self.event_engine.register(EVENT_CONTRACT, self.signal_contract.emit)
         self.event_engine.register(
             EVENT_RECORDER_LOG, self.signal_log.emit)
         self.event_engine.register(
@@ -136,10 +136,10 @@ class RecorderManager(QtWidgets.QWidget):
     def process_contract_event(self, event: Event):
         """"""
         contract = event.data
-        self.vt_symbols.append(contract.vt_symbol)
+        # self.vt_symbols.append(contract.vt_symbol)
 
-        model = self.symbol_completer.model()
-        model.setStringList(self.vt_symbols)
+        # model = self.symbol_completer.model()
+        # model.setStringList(self.vt_symbols)
 
     def process_exception_event(self, event: Event):
         """"""
