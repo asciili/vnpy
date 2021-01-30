@@ -127,6 +127,12 @@ class ChartWidget(pg.PlotWidget):
 
         self._item_plot_map[item] = plot
 
+    def get_item(self,item_name:str):   # hxxjava add
+        """
+        Get chart item by item's name.
+        """
+        return self._items.get(item_name,None)
+
     def get_plot(self, plot_name: str) -> pg.PlotItem:
         """
         Get specific plot with its name.
