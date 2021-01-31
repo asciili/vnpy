@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, Type
 
 import numpy as np
 import pyqtgraph as pg
@@ -10,10 +10,12 @@ from vnpy.trader.ui import create_qapp, QtCore, QtGui, QtWidgets
 from vnpy.trader.database import database_manager
 from vnpy.trader.constant import Exchange, Interval
 from vnpy.trader.object import BarData
+from vnpy.trader.utility import ArrayManager
 
 from vnpy.chart import ChartWidget, VolumeItem, CandleItem
 from vnpy.chart.item import ChartItem
 from vnpy.chart.manager import BarManager
+
 from vnpy.chart.base import NORMAL_FONT
 
 from vnpy.trader.engine import MainEngine
@@ -41,9 +43,9 @@ from vnpy.trader.object import (
     TradeData,
 )
 
-from .item import LineItem, RsiItem, SmaItem, MacdItem, TradeItem, OrderItem
+from .item import ExCandleItem, ExChartItem, LineItem, RsiItem, SmaItem, SarItem, MacdItem, TradeItem, OrderItem
 
-class NewChartWidget(ChartWidget):
+class ExChartWidget(ChartWidget):
     """ 
     基于ChartWidget的K线图表 
     """
@@ -65,14 +67,16 @@ class NewChartWidget(ChartWidget):
         super().__init__(parent)
         self.strategy_name = strategy_name
         self.event_engine = event_engine
+        self.am = ArrayManager(10000)
 
         # 创建K线主图及多个绘图部件
         self.add_plot("candle", hide_x_axis=True)
-        self.add_item(CandleItem, "candle", "candle")
+        self.add_item(ExCandleItem, "candle", "candle")
         self.add_item(LineItem, "line", "candle")
         self.add_item(SmaItem, "sma", "candle")
-        self.add_item(OrderItem, "order", "candle")
-        self.add_item(TradeItem, "trade", "candle")
+        self.add_item(SarItem, "sar", "candle")
+        # self.add_item(OrderItem, "order", "candle")
+        # self.add_item(TradeItem, "trade", "candle")
 
         # 创建成交量附图及绘图部件
         self.add_plot("volume", maximum_height=150)
@@ -160,6 +164,10 @@ class NewChartWidget(ChartWidget):
         Update a list of bar data.
         """
         self._manager.update_history(history)
+        # Put all new bars into dict
+        self.am.__init__(self.am.size)
+        for bar in self._manager.get_all_bars():
+            self.am.update_bar(bar)
 
         for item in self._items.values():
             item.update_history(history)
@@ -175,6 +183,7 @@ class NewChartWidget(ChartWidget):
         Update single bar data.
         """
         self._manager.update_bar(bar)
+        self.am.update_bar(bar)
 
         for item in self._items.values():
             item.update_bar(bar)
@@ -213,4 +222,35 @@ class NewChartWidget(ChartWidget):
         if trade_item:
             trade_item.add_trades(self.trades.values())
 
+    def add_item(
+        self,
+        item_class: Type[ChartItem],
+        item_name: str,
+        plot_name: str
+    ):
+        """
+        Add chart item.
+        """
+        if  issubclass(item_class, ExChartItem):
+            item = item_class(self._manager, self.am)
+        else:
+            item = item_class(self._manager)
+        self._items[item_name] = item
 
+        plot = self._plots.get(plot_name)
+        plot.addItem(item)
+
+        self._item_plot_map[item] = plot
+
+    def clear_all(self) -> None:
+        """
+        Clear all data.
+        """
+        self._manager.clear_all()
+        self.am.__init__(self.am.size)
+
+        for item in self._items.values():
+            item.clear_all()
+
+        if self._cursor:
+            self._cursor.clear_all()

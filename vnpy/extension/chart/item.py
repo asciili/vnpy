@@ -12,6 +12,7 @@ from vnpy.chart import ChartWidget, VolumeItem, CandleItem
 from vnpy.chart.item import ChartItem
 from vnpy.chart.manager import BarManager
 
+from vnpy.trader.utility import ArrayManager
 from vnpy.trader.object import (
     BarData,
     OrderData,
@@ -24,13 +25,77 @@ from collections import OrderedDict
 import pytz
 CHINA_TZ = pytz.timezone("Asia/Shanghai")
 
-
-class LineItem(CandleItem):
-    """"""
-
+class ExCandleItem(CandleItem):
     def __init__(self, manager: BarManager):
         """"""
         super().__init__(manager)
+    def get_info_text(self, ix: int) -> str:
+        """
+        Get information text to show by cursor.
+        """
+        bar = self._manager.get_bar(ix)
+
+        if bar:
+            words = [
+                
+                "Open",
+                str(bar.open_price),
+            ]
+            text = ":".join(words)
+        else:
+            text = ""
+
+        return text
+class ExChartItem(ChartItem):
+    """"""
+    def __init__(self, manager: BarManager, am: ArrayManager):
+        """"""
+        super().__init__(manager)
+        self.am = am
+        self.values = None
+    def update_values(self):
+        """
+        Update value.
+        """
+        pass
+
+    def update_history(self, history: List[BarData]) -> BarData:
+        """
+        Update a list of bar data.
+        """
+        self.update_values()
+        super().update_history(history)
+
+    def update_bar(self, bar: BarData) -> None:
+        """
+        Update single bar data.
+        """
+        self.update_values()
+        super().update_bar(bar)
+    def boundingRect(self) -> QtCore.QRectF:
+        """"""
+        min_price, max_price = self._manager.get_price_range()
+        rect = QtCore.QRectF(
+            0,
+            min_price,
+            len(self._bar_picutures),
+            max_price - min_price
+        )
+        return rect
+    def get_y_range(self, min_ix: int = None, max_ix: int = None) -> Tuple[float, float]:
+        """
+        Get range of y-axis with given x-axis range.
+
+        If min_ix and max_ix not specified, then return range with whole data set.
+        """
+        min_price, max_price = self._manager.get_price_range(min_ix, max_ix)
+        return min_price, max_price
+class LineItem(ExChartItem):
+    """"""
+
+    def __init__(self, manager: BarManager, am : ArrayManager):
+        """"""
+        super().__init__(manager, am)
 
         self.white_pen: QtGui.QPen = pg.mkPen(color=(255, 255, 255), width=1)
 
@@ -67,53 +132,27 @@ class LineItem(CandleItem):
             text = f"Close:{bar.close_price}"
         return text
 
-class SmaItem(CandleItem):
+class SmaItem(ExChartItem):
     """"""
 
-    def __init__(self, manager: BarManager):
+    def __init__(self, manager: BarManager, am : ArrayManager):
         """"""
-        super().__init__(manager)
+        super().__init__(manager, am)
 
         self.blue_pen: QtGui.QPen = pg.mkPen(color=(100, 100, 255), width=2)
 
-        self.sma_window = 10
-        self.sma_data: Dict[int, float] = {}
+        self.window = 10
 
-    def get_sma_value(self, ix: int) -> float:
-        """"""
-        if ix < 0:
-            return 0
-
-        # When initialize, calculate all rsi value
-        if not self.sma_data:
-            bars = self._manager.get_all_bars()
-            close_data = [bar.close_price for bar in bars]
-            sma_array = talib.SMA(np.array(close_data), self.sma_window)
-
-            for n, value in enumerate(sma_array):
-                self.sma_data[n] = value
-
-        # Return if already calcualted
-        if ix in self.sma_data:
-            return self.sma_data[ix]
-
-        # Else calculate new value
-        close_data = []
-        for n in range(ix - self.sma_window, ix + 1):
-            bar = self._manager.get_bar(n)
-            close_data.append(bar.close_price)
-
-        sma_array = talib.SMA(np.array(close_data), self.sma_window)
-        sma_value = sma_array[-1]
-        self.sma_data[ix] = sma_value
-
-        return sma_value
+    def update_values(self):
+        """
+        Update value
+        """
+        self.values = talib.SMA(self.am.close[-self.am.count:],self.window)
 
     def _draw_bar_picture(self, ix: int, bar: BarData) -> QtGui.QPicture:
         """"""
-        sma_value = self.get_sma_value(ix)
-        last_sma_value = self.get_sma_value(ix - 1)
-
+        value = self.values[ix]
+        last_value = self.values[ix - 1]
         # Create objects
         picture = QtGui.QPicture()
         painter = QtGui.QPainter(picture)
@@ -122,9 +161,13 @@ class SmaItem(CandleItem):
         painter.setPen(self.blue_pen)
 
         # Draw Line
-        start_point = QtCore.QPointF(ix-1, last_sma_value)
-        end_point = QtCore.QPointF(ix, sma_value)
-        painter.drawLine(start_point, end_point)
+        if np.isnan(last_value) or np.isnan(value):
+            # print(ix - 1, last_value,ix, value,)
+            pass
+        else:
+            start_point = QtCore.QPointF(ix-1, last_value)
+            end_point = QtCore.QPointF(ix, value)
+            painter.drawLine(start_point, end_point)
 
         # Finish
         painter.end()
@@ -132,61 +175,90 @@ class SmaItem(CandleItem):
 
     def get_info_text(self, ix: int) -> str:
         """"""
-        if ix in self.sma_data:
-            sma_value = self.sma_data[ix]
-            text = f"SMA {sma_value:.1f}"
+        if ix > 0:
+            text = f"SMA {self.values[ix]:.1f}"
         else:
             text = "SMA -"
 
         return text
-
-class RsiItem(ChartItem):
+class SarItem(ExChartItem):
     """"""
 
-    def __init__(self, manager: BarManager):
+    def __init__(self, manager: BarManager, am : ArrayManager, acceleration:float = 0.02, maximum:float = 0.2):
         """"""
-        super().__init__(manager)
+        super().__init__(manager, am)
+
+        self.yellow_pen: QtGui.QPen = pg.mkPen(color=(255, 255, 0), width=2)
+        self.yellow_brush: QtGui.QBrush = pg.mkBrush(color=(255, 255, 0))
+
+        self.acceleration = acceleration
+        self.maximum = maximum
+
+    def update_values(self):
+        """
+        Update value
+        """
+        self.values = talib.SAR(self.am.high[-self.am.count:], self.am.low[-self.am.count:], self.acceleration, self.maximum)
+
+    def _draw_bar_picture(self, ix: int, bar: BarData) -> QtGui.QPicture:
+        """"""
+        value = self.values[ix]
+        last_value = self.values[ix - 1]
+        # Create objects
+        picture = QtGui.QPicture()
+        painter = QtGui.QPainter(picture)
+
+        # Set painter color
+        painter.setPen(self.yellow_pen)
+        # painter.setBrush(self.yellow_brush)
+
+        # Draw Line
+        if np.isnan(last_value) or np.isnan(value):
+            # print(ix - 1, last_value,ix, value,)
+            pass
+        else:
+            start_point = QtCore.QPointF(ix-1, last_value)
+            end_point = QtCore.QPointF(ix, value)
+            painter.drawLine(start_point, end_point)
+
+        # Draw Circle
+        # painter.drawEllipse(QtCore.QPointF(ix, self.values[ix]), 2, 2)
+
+        # Finish
+        painter.end()
+        return picture
+
+    def get_info_text(self, ix: int) -> str:
+        """"""
+        if ix >= 0:
+            text = f"SAR {self.values[ix]:.1f}"
+        else:
+            text = "SAR -"
+
+        return text
+
+class RsiItem(ExChartItem):
+    """"""
+
+    def __init__(self, manager: BarManager, am : ArrayManager):
+        """"""
+        super().__init__(manager, am)
 
         self.white_pen: QtGui.QPen = pg.mkPen(color=(255, 255, 255), width=1)
         self.yellow_pen: QtGui.QPen = pg.mkPen(color=(255, 255, 0), width=2)
 
         self.rsi_window = 14
-        self.rsi_data: Dict[int, float] = {}
 
-    def get_rsi_value(self, ix: int) -> float:
-        """"""
-        if ix < 0:
-            return 50
-
-        # When initialize, calculate all rsi value
-        if not self.rsi_data:
-            bars = self._manager.get_all_bars()
-            close_data = [bar.close_price for bar in bars]
-            rsi_array = talib.RSI(np.array(close_data), self.rsi_window)
-
-            for n, value in enumerate(rsi_array):
-                self.rsi_data[n] = value
-
-        # Return if already calcualted
-        if ix in self.rsi_data:
-            return self.rsi_data[ix]
-
-        # Else calculate new value
-        close_data = []
-        for n in range(ix - self.rsi_window, ix + 1):
-            bar = self._manager.get_bar(n)
-            close_data.append(bar.close_price)
-
-        rsi_array = talib.RSI(np.array(close_data), self.rsi_window)
-        rsi_value = rsi_array[-1]
-        self.rsi_data[ix] = rsi_value
-
-        return rsi_value
+    def update_values(self):
+        """
+        Update value
+        """
+        self.values = talib.RSI(self.am.close[-self.am.count:], self.rsi_window)
 
     def _draw_bar_picture(self, ix: int, bar: BarData) -> QtGui.QPicture:
         """"""
-        rsi_value = self.get_rsi_value(ix)
-        last_rsi_value = self.get_rsi_value(ix - 1)
+        rsi_value = self.values[ix]
+        last_rsi_value = self.values[ix - 1]
 
         # Create objects
         picture = QtGui.QPicture()
@@ -237,8 +309,8 @@ class RsiItem(ChartItem):
 
     def get_info_text(self, ix: int) -> str:
         """"""
-        if ix in self.rsi_data:
-            rsi_value = self.rsi_data[ix]
+        if ix > 0:
+            rsi_value = self.values[ix]
             text = f"RSI {rsi_value:.1f}"
             # print(text)
         else:
@@ -258,15 +330,15 @@ def adjust_range(in_range:Tuple[float, float])->Tuple[float, float]:
     ret_range = (in_range[0]-diff*0.05,in_range[1]+diff*0.05)
     return ret_range
 
-class MacdItem(ChartItem):
+class MacdItem(ExChartItem):
     """"""
     _values_ranges: Dict[Tuple[int, int], Tuple[float, float]] = {}
 
     last_range:Tuple[int, int] = (-1,-1)    # 最新显示K线索引范围
 
-    def __init__(self, manager: BarManager):
+    def __init__(self, manager: BarManager, am : ArrayManager):
         """"""
-        super().__init__(manager)
+        super().__init__(manager, am)
 
         self.white_pen: QtGui.QPen = pg.mkPen(color=(255, 255, 255), width=1)
         self.yellow_pen: QtGui.QPen = pg.mkPen(color=(255, 255, 0), width=1)
@@ -289,9 +361,9 @@ class MacdItem(ChartItem):
             bars = self._manager.get_all_bars()
             close_data = [bar.close_price for bar in bars]
 
-            diffs,deas,macds = talib.MACD(np.array(close_data), 
-                                    fastperiod=self.short_window, 
-                                    slowperiod=self.long_window, 
+            diffs,deas,macds = talib.MACD(np.array(close_data),
+                                    fastperiod=self.short_window,
+                                    slowperiod=self.long_window,
                                     signalperiod=self.M)
 
             for n in range(0,len(diffs)):
@@ -307,10 +379,10 @@ class MacdItem(ChartItem):
             bar = self._manager.get_bar(n)
             close_data.append(bar.close_price)
 
-        diffs,deas,macds = talib.MACD(np.array(close_data), 
-                                            fastperiod=self.short_window, 
-                                            slowperiod=self.long_window, 
-                                            signalperiod=self.M) 
+        diffs,deas,macds = talib.MACD(np.array(close_data),
+                                            fastperiod=self.short_window,
+                                            slowperiod=self.long_window,
+                                            signalperiod=self.M)
         diff,dea,macd = diffs[-1],deas[-1],macds[-1]
         self.macd_data[ix] = (diff,dea,macd)
 
@@ -371,7 +443,7 @@ class MacdItem(ChartItem):
         return rect
 
     def get_y_range(self, min_ix: int = None, max_ix: int = None) -> Tuple[float, float]:
-        #   获得3个指标在y轴方向的范围   
+        #   获得3个指标在y轴方向的范围
         #   hxxjava 修改，2020-6-29
         #   当显示范围改变时，min_ix,max_ix的值不为None，当显示范围不变时，min_ix,max_ix的值不为None，
 
@@ -388,10 +460,10 @@ class MacdItem(ChartItem):
         if max_ix != None:          # 调整最大K线索引
             max_ix = min(max_ix, len(self.macd_data)-1)
 
-        last_range = (min_ix,max_ix)    # 请求的最新范围   
+        last_range = (min_ix,max_ix)    # 请求的最新范围
 
         if last_range == (None,None):   # 当显示范围不变时
-            if self.last_range in self._values_ranges:  
+            if self.last_range in self._values_ranges:
                 # 如果y方向范围已经保存
                 # 读取y方向范围
                 result = self._values_ranges[self.last_range]
@@ -403,7 +475,7 @@ class MacdItem(ChartItem):
                 min_ix,max_ix = 0,len(self.macd_data)-1
 
                 macd_list = list(self.macd_data.values())[min_ix:max_ix + 1]
-                ndarray = np.array(macd_list)           
+                ndarray = np.array(macd_list)
                 max_price = np.nanmax(ndarray)
                 min_price = np.nanmin(ndarray)
 
@@ -426,7 +498,7 @@ class MacdItem(ChartItem):
         # 该范围没有保存过y方向范围
         # 从macd_data重新计算y方向范围
         macd_list = list(self.macd_data.values())[min_ix:max_ix + 1]
-        ndarray = np.array(macd_list) 
+        ndarray = np.array(macd_list)
         max_price = np.nanmax(ndarray)
         min_price = np.nanmin(ndarray)
 
@@ -454,16 +526,16 @@ class MacdItem(ChartItem):
         return text
 
 
-class TradeItem(ScatterPlotItem,CandleItem): 
+class TradeItem(ScatterPlotItem,ExChartItem):
     """
     成交单绘图部件
     """
-    def __init__(self, manager: BarManager):
+    def __init__(self, manager: BarManager, am : ArrayManager):
         """"""
         ScatterPlotItem.__init__(self)
-        # CandleItem.__init__(self,manager)
-        # super(TradeItem,self).__init__(manager)
-        super(CandleItem,self).__init__(manager)
+        # ExChartItem.__init__(self,manager)
+        # super(TradeItem,self).__init__(manager, am)
+        super(ExChartItem,self).__init__(manager, am)
 
 
         self.blue_pen: QtGui.QPen = pg.mkPen(color=(100, 100, 255), width=2)
@@ -497,7 +569,7 @@ class TradeItem(ScatterPlotItem,CandleItem):
         else:
             self.trades[idx] = {trade.tradeid:trade}
 
-        if draw:        
+        if draw:
             self.set_scatter_data()
             self.update()
 
@@ -544,14 +616,14 @@ class TradeItem(ScatterPlotItem,CandleItem):
         return text
 
 
-class OrderItem(ScatterPlotItem,CandleItem): 
+class OrderItem(ScatterPlotItem,ExChartItem):
     """
     委托单绘图部件
     """
-    def __init__(self, manager: BarManager):
+    def __init__(self, manager: BarManager, am : ArrayManager):
         """"""
         ScatterPlotItem.__init__(self)
-        super(CandleItem,self).__init__(manager)
+        super(ExChartItem,self).__init__(manager, am)
 
         self.orders : Dict[int,Dict[str,Order]] = {} # {ix:{orderid:order}}
 
@@ -601,7 +673,7 @@ class OrderItem(ScatterPlotItem,CandleItem):
                 elif order.price<lowest:
                     show_price = lowest + 7
                 else:
-                    show_price = order.price 
+                    show_price = order.price
 
                 scatter = {
                     "pos" : (ix, show_price),

@@ -4,7 +4,7 @@ from vnpy.trader.ui import create_qapp, QtCore
 from vnpy.trader.database import database_manager
 from vnpy.trader.constant import Exchange, Interval
 from vnpy.chart import ChartWidget, VolumeItem, CandleItem
-from vnpy.extension.chart import NewChartWidget
+from vnpy.extension.chart import ExChartWidget
 
 if __name__ == "__main__":
     app = create_qapp()
@@ -22,7 +22,7 @@ if __name__ == "__main__":
     event_engine = None
     # event_engine = EventEngine()
 
-    widget = NewChartWidget(event_engine = event_engine)
+    widget = ExChartWidget(event_engine = event_engine)
 
     dynamic = False  # 是否动态演示
     n = 1000          # 缓冲K线根数
