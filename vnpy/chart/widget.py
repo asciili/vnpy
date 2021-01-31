@@ -237,10 +237,18 @@ class ChartWidget(pg.PlotWidget):
         """
         Reimplement this method of parent to move chart horizontally and zoom in/out.
         """
+        count = 1
+        if event.modifiers() & QtCore.Qt.ShiftModifier:
+            count =  self._manager.get_count() / 2
+        if event.modifiers() & QtCore.Qt.ControlModifier:
+            count =  self._manager.get_count()
+        if event.modifiers() & QtCore.Qt.AltModifier:
+            count =  10
+
         if event.key() == QtCore.Qt.Key_Left:
-            self._on_key_left()
+            self._on_key_left(count)
         elif event.key() == QtCore.Qt.Key_Right:
-            self._on_key_right()
+            self._on_key_right(count)
         elif event.key() == QtCore.Qt.Key_Up:
             self._on_key_up()
         elif event.key() == QtCore.Qt.Key_Down:
@@ -257,22 +265,22 @@ class ChartWidget(pg.PlotWidget):
         elif delta.y() < 0:
             self._on_key_down()
 
-    def _on_key_left(self) -> None:
+    def _on_key_left(self, count:int = 1) -> None:
         """
         Move chart to left.
         """
-        self._right_ix -= 1
+        self._right_ix -= count
         self._right_ix = max(self._right_ix, self._bar_count)
 
         self._update_x_range()
         self._cursor.move_left()
         self._cursor.update_info()
 
-    def _on_key_right(self) -> None:
+    def _on_key_right(self, count:int = 1) -> None:
         """
         Move chart to right.
         """
-        self._right_ix += 1
+        self._right_ix += count
         self._right_ix = min(self._right_ix, self._manager.get_count())
 
         self._update_x_range()
